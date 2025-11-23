@@ -1,4 +1,4 @@
-- LocalScript: Realistic Night Sky with Only Stars v2.6
+-- LocalScript: Realistic Night Sky with Only Stars v2.6
 -- Изменения: Убраны метеоры и облака, оставлены только статичные звезды для простоты. Звезды остаются яркими и обновляются относительно игрока.
 
 local Lighting = game:GetService("Lighting")
