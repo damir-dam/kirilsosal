@@ -1,0 +1,179 @@
+- LocalScript: Realistic Night Sky with Only Stars v2.6
+-- Изменения: Убраны метеоры и облака, оставлены только статичные звезды для простоты. Звезды остаются яркими и обновляются относительно игрока.
+
+local Lighting = game:GetService("Lighting")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+-- Настройки
+local SKY_RADIUS = 3000
+local STAR_COUNT = 2000
+local FOG_DENSITY = 0.05
+local NIGHT_COLOR = Color3.fromRGB(25, 25, 50)
+
+-- Переменные
+local nightEnabled = false
+local starSky = nil
+local originalSky = Lighting:FindFirstChildOfClass("Sky")
+local connection = nil
+local lastCheck = 0
+local playerChar = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local humanoidRoot = playerChar:WaitForChild("HumanoidRootPart")
+
+-- Функция обновления позиции относительно игрока
+local function updatePositions()
+    if not nightEnabled then return end
+    local playerPos = humanoidRoot.Position
+    if starSky then starSky.Position = playerPos end
+    print("v2.6: Star positions updated to player at", playerPos)
+end
+
+-- Создание звёзд (только они)
+local function createStarSky()
+    if starSky and starSky.Parent then 
+        pcall(function() starSky:Destroy() end)
+        starSky = nil 
+    end
+    
+    starSky = Instance.new("Part")
+    starSky.Name = "LocalStarSky"
+    starSky.Size = Vector3.new(SKY_RADIUS * 2, SKY_RADIUS * 2, SKY_RADIUS * 2)
+    starSky.Position = humanoidRoot.Position
+    starSky.Anchored = true
+    starSky.CanCollide = false
+    starSky.Transparency = 1
+    starSky.Parent = workspace
+    
+    local starEmitter = Instance.new("ParticleEmitter")
+    starEmitter.Name = "LocalStars"
+    starEmitter.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+    starEmitter.Lifetime = NumberRange.new(5, 10)
+    starEmitter.Rate = 800
+    starEmitter.SpreadAngle = Vector2.new(360, 360)
+    starEmitter.Speed = NumberRange.new(0)
+    starEmitter.Color = ColorSequence.new{
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 220, 255))
+    }
+    starEmitter.Size = NumberSequence.new{NumberSequenceKeypoint.new(0, 0.5), NumberSequenceKeypoint.new(1, 0.3)}
+    starEmitter.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(1, 0.6)}
+    starEmitter.LightEmission = 0.6
+    starEmitter.Parent = starSky
+    
+    pcall(function()
+        local sparkleTween = TweenService:Create(starEmitter, TweenInfo.new(2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {Rate = 600})
+        sparkleTween:Play()
+    end)
+    print("v2.6: Stars created at", starSky.Position)
+end
+
+-- Настройка освещения (простая ночь)
+local function setupNightLighting()
+    Lighting.ClockTime = 0
+    Lighting.Brightness = 1.5
+    Lighting.FogEnd = 2000
+    Lighting.FogStart = 0
+    Lighting.FogColor = NIGHT_COLOR
+    Lighting.Ambient = Color3.fromRGB(40, 40, 70)
+    Lighting.OutdoorAmbient = Color3.fromRGB(20, 20, 50)
+    Lighting.ColorShift_Top = Color3.fromRGB(0, 50, 100)
+    
+    local currentSky = Lighting:FindFirstChildOfClass("Sky")
+    if currentSky then
+        pcall(function() currentSky:Destroy() end)
+        originalSky = currentSky:Clone()
+    end
+    
+    local nightSky = Instance.new("Sky")
+    nightSky.Name = "LocalNightSky"
+    nightSky.SkyboxBk = "rbxasset://textures/sky/sky512_bk.tex"
+    nightSky.SkyboxDn = "rbxasset://textures/sky/sky512_dn.tex"
+    nightSky.SkyboxFt = "rbxasset://textures/sky/sky512_ft.tex"
+    nightSky.SkyboxLf = "rbxasset://textures/sky/sky512_lf.tex"
+    nightSky.SkyboxRt = "rbxasset://textures/sky/sky512_rt.tex"
+    nightSky.SkyboxUp = "rbxasset://textures/sky/sky512_up.tex"
+    nightSky.StarCount = 4000
+    nightSky.SunAngularSize = 0
+    nightSky.MoonAngularSize = 15
+    nightSky.Parent = Lighting
+    print("v2.6: Night lighting setup")
+end
+
+-- Выключение
+local function disableNight()
+    nightEnabled = false
+    if connection then connection:Disconnect() end
+    
+    pcall(function()
+        if starSky then starSky:Destroy() end
+    end)
+    starSky = nil
+    
+    Lighting.ClockTime = 14
+    Lighting.Brightness = 2
+    Lighting.FogEnd = 100000
+    Lighting.FogStart = 90000
+    Lighting.FogColor = Color3.fromRGB(192, 192, 192)
+    Lighting.Ambient = Color3.fromRGB(128, 128, 128)
+    Lighting.OutdoorAmbient = Color3.fromRGB(128, 128, 128)
+    Lighting.ColorShift_Top = Color3.fromRGB(0, 0, 0)
+    
+    local currentSky = Lighting:FindFirstChildOfClass("Sky")
+    if currentSky and currentSky.Name == "LocalNightSky" then
+        pcall(function() currentSky:Destroy() end)
+    end
+    
+    if originalSky then
+        local newSky = originalSky:Clone()
+        newSky.Parent = Lighting
+    end
+    print("v2.6: Night disabled")
+end
+
+-- Запуск (только звезды)
+local function createBeautifulNight()
+    setupNightLighting()
+    createStarSky()
+    updatePositions()
+end
+
+-- Toggle
+local function toggleNight()
+    if nightEnabled then
+        disableNight()
+    else
+        createBeautifulNight()
+        nightEnabled = true
+        if connection then connection:Disconnect() end
+        connection = RunService.Heartbeat:Connect(function()
+            if not nightEnabled then return end
+            local currentTime = tick()
+            if currentTime - lastCheck < 5 then return end
+            lastCheck = currentTime
+            
+            pcall(setupNightLighting)
+            if not (starSky and starSky.Parent) then createStarSky() end
+            pcall(updatePositions)
+        end)
+    end
+end
+
+-- Чат-команда
+LocalPlayer.Chatted:Connect(function(message)
+    if message:lower() == "/night" then
+        toggleNight()
+    end
+end)
+
+-- Обновление при респавне
+LocalPlayer.CharacterAdded:Connect(function(char)
+    playerChar = char
+    humanoidRoot = char:WaitForChild("HumanoidRootPart")
+    if nightEnabled then
+        updatePositions()
+    end
+end)
+
+print("v2.6 loaded! Type /night to toggle. Only stars now.")
