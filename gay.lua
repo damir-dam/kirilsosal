@@ -1,50 +1,46 @@
 -- ============================================================
--- ОБХОД РЕГИСТРАЦИИ (вставьте в начало скрипта)
+-- ОБХОД РЕГИСТРАЦИИ (без изменения os.time)
 -- ============================================================
 
--- 1. Отключаем проверку времени
-local _gPVm = 1786218737935
-local old_os_time = os.time
-os.time = function()
-    return _gPVm / 1000
+-- 1. Перехватываем error, чтобы игнорировать коды 1-8 (ошибки авторизации)
+local _old_error = _G.error or error
+_G.error = function(msg, level)
+    if type(msg) == "number" and msg >= 1 and msg <= 8 then
+        print("[Обход] Игнорируем ошибку авторизации: " .. tostring(msg))
+        return
+    end
+    return _old_error(msg, level)
 end
 
--- 2. Перехватываем HTTP‑запрос и всегда возвращаем успех
-local old_request = (syn and syn.request) or request or (http and http.request)
-if old_request then
+-- 2. Подменяем HTTP‑запрос (если доступен request / syn.request)
+local _old_request = (syn and syn.request) or request or (http and http.request) or _G.request
+if _old_request then
     _G.request = function(options)
         if options.Url and options.Url:find("api.absense.cc/verify") then
-            -- Фиктивный ответ в формате JSON (base64)
+            -- Фиктивный JSON‑ответ (base64)
             return {
                 StatusCode = 200,
                 Body = "ewogICJzdGF0dXMiOiAib2siLAogICJzZXNzaW9uX2tleSI6ICJmYWtlIiwKICAiY2lwaGVyX3Bhc3N3b3JkIjogImZha2UiLAogICJ2ZXJpZnlfdG9rZW4iOiAiZmFrZSIsCiAgIndhdGVybWFyayI6ICJmYWtlIiwKICAiY29uc3RhbnRzIjoge30sCiAgImNyeXB0b19wYXlsb2FkIjogImZha2VfY3J5cHRvIgp9"
             }
         end
-        return old_request(options)
+        return _old_request(options)
     end
 end
 
--- 3. Подменяем функцию расшифровки (возвращаем пустой модуль)
-local old_fDMabQ = _fDMabQ
-_fDMabQ = function(hex, key)
-    -- Возвращаем строку, которая при loadstring даст пустую функцию
-    return "return function() return {} end"
-end
-
--- 4. Игнорируем ошибки авторизации (коды 1-8)
-local old_error = error
-error = function(msg, level)
-    if type(msg) == "number" and msg >= 1 and msg <= 8 then
-        print("[Обход] Пропускаем ошибку авторизации: " .. tostring(msg))
-        return
+-- 3. Подменяем loadstring – при загрузке crypto_payload возвращаем пустую функцию
+local _old_loadstring = loadstring
+_G.loadstring = function(str, chunkname)
+    -- Если строка содержит "return function", значит это crypto_payload
+    if str and str:find("return function") then
+        -- Возвращаем функцию, которая возвращает пустую таблицу
+        return function()
+            return function() return {} end
+        end
     end
-    old_error(msg, level)
+    return _old_loadstring(str, chunkname)
 end
 
--- 5. (Опционально) Отключаем проверку глобальной переменной _g5sZ (print-лог)
-_g5sZ = false
-
-print("[Обход] Регистрация успешно обойдена (фиктивно)")
+print("[Обход] Регистрация обойдена (фиктивно)")
 --!nocheck
 local function _bAcNHk(_pXOF) local _LC7v8Ff=bit32.bxor(_pXOF or 0,0x44F78232) return bit32.band(_LC7v8Ff,0x0201) end
 local function _dITyW2b(_EI5do0m) local _y1VIaI=bit32.bxor(_EI5do0m or 0,0x19559DE5) return bit32.band(_y1VIaI,0x2883) end
