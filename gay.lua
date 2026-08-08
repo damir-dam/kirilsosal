@@ -1,23 +1,62 @@
--- ============================================================
--- ОБХОД РЕГИСТРАЦИИ (без изменения os.time)
--- ============================================================
+-- ==============================================================
+-- ОБХОД РЕГИСТРАЦИИ (через debug.setupvalue)
+-- ==============================================================
 
--- 1. Перехватываем error, чтобы игнорировать коды 1-8 (ошибки авторизации)
-local _old_error = _G.error or error
-_G.error = function(msg, level)
+-- 1. Перехватываем ошибки (на всякий случай)
+local _old_error = error
+error = function(msg, level)
     if type(msg) == "number" and msg >= 1 and msg <= 8 then
-        print("[Обход] Игнорируем ошибку авторизации: " .. tostring(msg))
+        print("[Обход] Игнорируем ошибку: " .. tostring(msg))
         return
     end
-    return _old_error(msg, level)
+    _old_error(msg, level)
 end
 
--- 2. Подменяем HTTP‑запрос (если доступен request / syn.request)
+-- 2. Изменяем значение _gPVm в замыкании (если доступен debug)
+if debug and debug.getupvalue and debug.setupvalue then
+    -- Ищем функцию, которая содержит _gPVm (это может быть основная функция скрипта)
+    local function find_and_patch()
+        local current = 1
+        while true do
+            local func = debug.getinfo(current, "f").func
+            if not func then break end
+            -- Проверяем замыкания этой функции
+            local i = 1
+            while true do
+                local name, value = debug.getupvalue(func, i)
+                if not name then break end
+                if name == "_gPVm" then
+                    debug.setupvalue(func, i, os.time() * 1000 - 1000) -- ставим текущее время минус 1 сек
+                    print("[Обход] _gPVm изменён")
+                    return true
+                end
+                i = i + 1
+            end
+            current = current + 1
+        end
+        return false
+    end
+    find_and_patch()
+else
+    -- Если debug нет, пытаемся подменить math.abs и math.floor (менее надёжно)
+    pcall(function()
+        rawset(_G, "math", {
+            abs = function() return 0 end,
+            floor = function() return 0 end
+        })
+    end)
+    pcall(function()
+        rawset(_G, "os", {
+            time = function() return 1786218737.935 end
+        })
+    end)
+end
+
+-- 3. Подмена HTTP‑запроса (как в прошлом варианте)
 local _old_request = (syn and syn.request) or request or (http and http.request) or _G.request
 if _old_request then
     _G.request = function(options)
         if options.Url and options.Url:find("api.absense.cc/verify") then
-            -- Фиктивный JSON‑ответ (base64)
             return {
                 StatusCode = 200,
                 Body = "ewogICJzdGF0dXMiOiAib2siLAogICJzZXNzaW9uX2tleSI6ICJmYWtlIiwKICAiY2lwaGVyX3Bhc3N3b3JkIjogImZha2UiLAogICJ2ZXJpZnlfdG9rZW4iOiAiZmFrZSIsCiAgIndhdGVybWFyayI6ICJmYWtlIiwKICAiY29uc3RhbnRzIjoge30sCiAgImNyeXB0b19wYXlsb2FkIjogImZha2VfY3J5cHRvIgp9"
@@ -27,12 +66,10 @@ if _old_request then
     end
 end
 
--- 3. Подменяем loadstring – при загрузке crypto_payload возвращаем пустую функцию
+-- 4. Подмена loadstring (для crypto_payload)
 local _old_loadstring = loadstring
 _G.loadstring = function(str, chunkname)
-    -- Если строка содержит "return function", значит это crypto_payload
     if str and str:find("return function") then
-        -- Возвращаем функцию, которая возвращает пустую таблицу
         return function()
             return function() return {} end
         end
@@ -40,7 +77,7 @@ _G.loadstring = function(str, chunkname)
     return _old_loadstring(str, chunkname)
 end
 
-print("[Обход] Регистрация обойдена (фиктивно)")
+print("[Обход] Регистрация обойдена (debug-метод)")
 --!nocheck
 local function _bAcNHk(_pXOF) local _LC7v8Ff=bit32.bxor(_pXOF or 0,0x44F78232) return bit32.band(_LC7v8Ff,0x0201) end
 local function _dITyW2b(_EI5do0m) local _y1VIaI=bit32.bxor(_EI5do0m or 0,0x19559DE5) return bit32.band(_y1VIaI,0x2883) end
